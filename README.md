@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DRscore - AWS Disaster Recovery Readiness Scorer
 
-## Getting Started
+DRscore helps teams assess AWS disaster recovery readiness, track historical assessments, compare against community benchmarks, and share practical DR tips.
 
-First, run the development server:
+## Features
+
+- Checklist-based AWS DR scoring with weighted controls
+- User authentication (Supabase Auth)
+- Save, load, update, and delete assessments
+- Overwrite confirmation for duplicate assessment names
+- Community benchmark panel and "most skipped" insights
+- Community tips submission and display
+- Vercel Analytics integration
+
+## Tech Stack
+
+- Next.js (App Router)
+- React
+- TypeScript
+- Supabase (Auth + Postgres + RPC)
+- Vercel (deployment + analytics)
+
+## Local Setup
+
+### 1) Install dependencies
+
+```bash
+npm install
+```
+
+### 2) Create environment variables
+
+Create a `.env.local` file in the project root:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### 3) Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase Requirements
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This app expects:
 
-## Learn More
+- an `assessments` table
+- a `community_tips` table
+- an RPC function named `get_community_stats`
 
-To learn more about Next.js, take a look at the following resources:
+The UI currently reads/writes these fields:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `assessments`: `id`, `user_id`, `name`, `score`, `checked_items`, `company_size`, `created_at`
+- `community_tips`: `id`, `item_id`, `tip_text`, `author_label`, `user_id`, `created_at`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Also ensure Row Level Security policies allow authenticated users to perform the intended operations for their own records.
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Deploy on Vercel:
+
+1. Push this repo to GitHub.
+2. Import the repo in Vercel.
+3. Add the same environment variables in Vercel project settings.
+4. Deploy.
+
+## Project Structure
+
+- `app/page.tsx` - main DR scorer UI and dashboard/community views
+- `app/auth/page.tsx` - sign in/sign up UI
+- `app/auth/callback/route.ts` - auth callback handler
+- `utils/supabase/client.ts` - browser Supabase client
+- `utils/supabase/server.ts` - server Supabase client
+- `middleware.ts` - auth/session middleware setup
+
+## Notes
+
+- The app is optimized for authenticated usage (assessment persistence and tip posting).
+- Community data has fallback values in UI if live queries fail.
