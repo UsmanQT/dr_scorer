@@ -1,93 +1,110 @@
-# DRscore - AWS Disaster Recovery Readiness Scorer
+# DRscore
 
-DRscore helps teams assess AWS disaster recovery readiness, track historical assessments, compare against community benchmarks, and share practical DR tips.
+AWS Disaster Recovery Readiness Scorer built with Next.js + Supabase.
 
-## Features
+Assess your DR posture, save assessments, compare against community benchmark data, and collect practical recovery tips from other teams.
 
-- Checklist-based AWS DR scoring with weighted controls
-- User authentication (Supabase Auth)
-- Save, load, update, and delete assessments
-- Overwrite confirmation for duplicate assessment names
-- Community benchmark panel and "most skipped" insights
-- Community tips submission and display
+---
+
+## Highlights
+
+- Weighted AWS DR checklist scoring
+- Authenticated save/load/update/delete assessments
+- Duplicate-name overwrite confirmation
+- Community benchmark insights (`get_community_stats`)
+- Community tips feed + tip submission
 - Vercel Analytics integration
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[User Browser] --> A[Next.js App Router UI]
+  A --> SA[Supabase Auth]
+  A --> DB[(Supabase Postgres)]
+  A --> RPC[get_community_stats RPC]
+  DB --> T[assessments]
+  DB --> C[community_tips]
+  A --> VA[Vercel Analytics]
+```
+
+## Screenshots
+
+![DRscore Screenshot 1](docs/images/image.png)
+![DRscore Screenshot 2](docs/images/image%20copy.png)
+![DRscore Screenshot 3](docs/images/image%20copy%202.png)
 
 ## Tech Stack
 
 - Next.js (App Router)
-- React
-- TypeScript
-- Supabase (Auth + Postgres + RPC)
-- Vercel (deployment + analytics)
+- React + TypeScript
+- Supabase (`@supabase/supabase-js`, `@supabase/ssr`)
+- Vercel (hosting + analytics)
 
-## Local Setup
+## Quick Start
 
-### 1) Install dependencies
+1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2) Create environment variables
-
-Create a `.env.local` file in the project root:
+2. Add environment variables to `.env.local`
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 3) Run the app
+3. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+App runs at [http://localhost:3000](http://localhost:3000).
 
-## Supabase Requirements
+## Supabase Setup
 
 This app expects:
 
-- an `assessments` table
-- a `community_tips` table
-- an RPC function named `get_community_stats`
+- Table: `assessments`
+- Table: `community_tips`
+- RPC: `get_community_stats`
 
-The UI currently reads/writes these fields:
+Fields currently used by the app:
 
 - `assessments`: `id`, `user_id`, `name`, `score`, `checked_items`, `company_size`, `created_at`
 - `community_tips`: `id`, `item_id`, `tip_text`, `author_label`, `user_id`, `created_at`
 
-Also ensure Row Level Security policies allow authenticated users to perform the intended operations for their own records.
+Make sure RLS policies allow authenticated users to read/write only the records they should access.
 
 ## Scripts
 
 ```bash
-npm run dev
-npm run build
-npm run start
-npm run lint
+npm run dev    # local development
+npm run build  # production build
+npm run start  # run production build
+npm run lint   # lint checks
 ```
 
-## Deployment
+## Deploying to Vercel
 
-Deploy on Vercel:
+1. Push code to GitHub
+2. Import repo into Vercel
+3. Add required env vars in Vercel project settings
+4. Deploy
 
-1. Push this repo to GitHub.
-2. Import the repo in Vercel.
-3. Add the same environment variables in Vercel project settings.
-4. Deploy.
+## Key Files
 
-## Project Structure
-
-- `app/page.tsx` - main DR scorer UI and dashboard/community views
-- `app/auth/page.tsx` - sign in/sign up UI
-- `app/auth/callback/route.ts` - auth callback handler
+- `app/page.tsx` - scorer UI, dashboard, and community views
+- `app/auth/page.tsx` - sign in / sign up
+- `app/auth/callback/route.ts` - auth callback exchange
 - `utils/supabase/client.ts` - browser Supabase client
 - `utils/supabase/server.ts` - server Supabase client
-- `middleware.ts` - auth/session middleware setup
+- `middleware.ts` - auth session middleware
 
 ## Notes
 
-- The app is optimized for authenticated usage (assessment persistence and tip posting).
-- Community data has fallback values in UI if live queries fail.
+- The app works best when signed in (assessment persistence + tip posting).
+- Community UI falls back to local default data if live queries fail.
