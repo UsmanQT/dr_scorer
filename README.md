@@ -108,3 +108,10 @@ npm run lint   # lint checks
 
 - The app works best when signed in (assessment persistence + tip posting).
 - Community UI falls back to local default data if live queries fail.
+
+## AI Future Prospects
+
+- **Auto-generated runbook drafts**: Generate a DR runbook template from the user’s missed controls and weakest categories.
+- **Prioritized recommendations**: Convert assessment gaps into ranked, high-impact next actions with suggested owners.
+- **Executive summary generator**: Produce stakeholder-ready summaries of current DR posture, risk level, and immediate priorities.
+- **Tip summarization and deduplication**: Cluster similar community tips, remove noise, and highlight the most actionable guidance.

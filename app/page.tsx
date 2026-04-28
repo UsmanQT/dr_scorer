@@ -331,10 +331,12 @@ function TipModal({
 
 function CommunityPanel({
   userScore,
+  latestSavedScore,
   companySize,
   communityData,
 }: {
   userScore: number;
+  latestSavedScore?: number | null;
   companySize: string;
   communityData: CommunityData;
 }) {
@@ -347,8 +349,13 @@ function CommunityPanel({
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <ScoreRing score={userScore} size={72} />
           <div>
-            <div style={{ fontSize: 13, color: "#64748B" }}>Your score</div>
+            <div style={{ fontSize: 13, color: "#64748B" }}>Your current draft</div>
             <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>vs {tier.count.toLocaleString()} {tier.label} teams</div>
+            {typeof latestSavedScore === "number" && (
+              <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>
+                Latest saved: <span style={{ fontWeight: 600 }}>{latestSavedScore}</span>
+              </div>
+            )}
           </div>
         </div>
         {communityData.bySize.map((b) => {
@@ -636,6 +643,9 @@ export default function DRScorer() {
   const score = calcScore(checked);
   const grade = getGrade(score);
   const checkedCount = Object.values(checked).filter(Boolean).length;
+  const latestSavedAssessment = savedAssessments[0] ?? null;
+  const latestSavedScore = latestSavedAssessment ? latestSavedAssessment.score : null;
+  const latestSavedGrade = typeof latestSavedScore === "number" ? getGrade(latestSavedScore) : null;
 
   const toggle = useCallback((id: string) => {
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -1009,6 +1019,11 @@ export default function DRScorer() {
           </div>
           {user ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto", maxWidth: isMobile ? "100%" : "none" }}>
+              {typeof latestSavedScore === "number" && (
+                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, background: latestSavedGrade?.track, color: latestSavedGrade?.color, fontWeight: 600 }}>
+                  Latest saved: {latestSavedScore}
+                </span>
+              )}
               <span style={{ fontSize: 12, color: "#94A3B8", maxWidth: isMobile ? 120 : 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {user.email}
               </span>
@@ -1101,6 +1116,20 @@ export default function DRScorer() {
 
             {/* Right panel */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, position: isMobile ? "static" : "sticky", top: 24 }}>
+              {typeof latestSavedScore === "number" && (
+                <div style={{ background: "white", borderRadius: 14, padding: 14, border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>Latest saved score</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: latestSavedGrade?.color, fontFamily: "'DM Mono', monospace" }}>{latestSavedScore}</div>
+                      <div style={{ fontSize: 12, color: "#94A3B8" }}>{latestSavedAssessment?.date}</div>
+                    </div>
+                    <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, background: latestSavedGrade?.track, color: latestSavedGrade?.color, fontWeight: 600 }}>
+                      {latestSavedGrade?.label}
+                    </span>
+                  </div>
+                </div>
+              )}
               {/* Score card */}
               <div style={{ background: "white", borderRadius: 14, padding: 20, border: "1px solid #E2E8F0" }}>
                 <div style={{ display: "flex", alignItems: "center", flexDirection: isMobile ? "column" : "row", gap: 16, marginBottom: 16 }}>
@@ -1205,7 +1234,7 @@ export default function DRScorer() {
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20 }}>
-              <CommunityPanel userScore={score} companySize={companySize} communityData={communityData} />
+              <CommunityPanel userScore={score} latestSavedScore={latestSavedScore} companySize={companySize} communityData={communityData} />
               <div style={{ background: "white", borderRadius: 14, padding: 18, border: "1px solid #E2E8F0" }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 14 }}>Community tips</div>
                 {Object.entries(communityData.tips).map(([id, tips]) => {
