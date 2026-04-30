@@ -52,9 +52,12 @@ type SavedAssessment = {
   name: string;
   score: number;
   date: string;
+  createdAt: string;
   checkedCount: number;
   checked?: Record<string, boolean>;
 };
+
+type TrendRange = "1D" | "1W" | "1M" | "3M" | "6M";
 
 type CommunityTipRow = {
   id: string | number;
@@ -461,6 +464,194 @@ function SavedAssessments({
   );
 }
 
+function AssessmentsTrendCard({
+  assessments,
+  selectedRange,
+  onRangeChange,
+}: {
+  assessments: SavedAssessment[];
+  selectedRange: TrendRange;
+  onRangeChange: (range: TrendRange) => void;
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const now = Date.now();
+  const rangeDays: Record<TrendRange, number> = {
+    "1D": 1, "1W": 7, "1M": 30, "3M": 90, "6M": 180,
+  };
+  const cutoff = now - rangeDays[selectedRange] * 24 * 60 * 60 * 1000;
+  const rangeOptions: TrendRange[] = ["1D", "1W", "1M", "3M", "6M"];
+
+  const sortedAsc = [...assessments].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const filtered = sortedAsc.filter((a) => new Date(a.createdAt).getTime() >= cutoff);
+  const latest = filtered.length > 0 ? filtered[filtered.length - 1] : null;
+  const earliest = filtered.length > 0 ? filtered[0] : null;
+  const best = filtered.length > 0 ? filtered.reduce((acc, curr) => (curr.score > acc.score ? curr : acc), filtered[0]) : null;
+  const delta = latest && earliest ? latest.score - earliest.score : 0;
+
+  const chartWidth = 480;
+  const chartHeight = 180;
+  const padX = 28;
+  const padY = 18;
+  const padBottom = 36;
+  const innerWidth = chartWidth - padX * 2;
+  const innerHeight = chartHeight - padY - padBottom;
+
+  const points = filtered.map((a, i) => {
+    const x = filtered.length <= 1 ? chartWidth / 2 : padX + (i / (filtered.length - 1)) * innerWidth;
+    const y = padY + ((100 - a.score) / 100) * innerHeight;
+    return { x, y, score: a.score, label: a.date, name: a.name };
+  });
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
+    .join(" ");
+
+  // Area fill path
+  const areaD = points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x.toFixed(2)} ${(padY + innerHeight).toFixed(2)} L ${points[0].x.toFixed(2)} ${(padY + innerHeight).toFixed(2)} Z`
+    : "";
+
+  const hovered = hoveredIdx !== null ? points[hoveredIdx] : null;
+
+  return (
+    <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: 14, padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <div>
+        <div style={{ fontSize: 11, color: "#94A3B8" }}>Readiness over time ({selectedRange})</div>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {rangeOptions.map((range) => (
+            <button key={range} onClick={() => onRangeChange(range)}
+              style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, border: "1px solid #E2E8F0",
+                background: selectedRange === range ? "#1E293B" : "white",
+                color: selectedRange === range ? "white" : "#64748B",
+                cursor: "pointer", fontWeight: 600 }}>
+              {range}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+        {[
+          { label: "Latest", value: latest ? latest.score : "—", color: "#1E293B" },
+          { label: "Change", value: latest ? `${delta >= 0 ? "+" : ""}${delta}` : "—", color: delta >= 0 ? "#059669" : "#B91C1C" },
+          { label: "Best", value: best ? best.score : "—", color: "#2563EB" },
+        ].map((stat) => (
+          <div key={stat.label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em" }}>{stat.label}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: stat.color, fontFamily: "'DM Mono', monospace" }}>{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {points.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#94A3B8", padding: "12px 4px" }}>No assessments in this range yet.</div>
+      ) : (
+        <div style={{ width: "100%", overflowX: "auto", position: "relative" }}>
+          <svg
+            width={chartWidth}
+            height={chartHeight + padBottom}
+            style={{ display: "block", cursor: "crosshair" }}
+            onMouseLeave={() => setHoveredIdx(null)}
+          >
+            <defs>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2563EB" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="#2563EB" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+
+            {/* Grid lines */}
+            {[0, 25, 50, 75, 100].map((tick) => {
+              const y = padY + ((100 - tick) / 100) * innerHeight;
+              return (
+                <g key={tick}>
+                  <line x1={padX} y1={y} x2={chartWidth - padX} y2={y} stroke="#F1F5F9" strokeWidth={1} />
+                  <text x={4} y={y + 4} fontSize="9" fill="#CBD5E1">{tick}</text>
+                </g>
+              );
+            })}
+
+            {/* Area fill */}
+            {areaD && <path d={areaD} fill="url(#areaGrad)" />}
+
+            {/* Line */}
+            <path d={pathD} fill="none" stroke="#2563EB" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+
+            {/* X-axis date labels */}
+            {points.map((p, i) => {
+              const maxLabels = 5;
+              const step = Math.max(1, Math.floor(points.length / maxLabels));
+              if (i % step !== 0 && i !== points.length - 1) return null;
+              const shortDate = p.label.replace(/,\s*\d{4}$/, "");
+              return (
+                <text key={i} x={p.x} y={chartHeight + padBottom - 4} fontSize="9" fill="#94A3B8"
+                  textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}>
+                  {shortDate}
+                </text>
+              );
+            })}
+
+            {/* Hover hit areas */}
+            {points.map((p, i) => (
+              <rect key={i}
+                x={i === 0 ? padX : (points[i - 1].x + p.x) / 2}
+                y={padY}
+                width={
+                  i === 0
+                    ? (points.length > 1 ? (points[1].x + p.x) / 2 - padX : innerWidth)
+                    : i === points.length - 1
+                    ? p.x - (points[i - 1].x + p.x) / 2
+                    : (points[i + 1].x + p.x) / 2 - (points[i - 1].x + p.x) / 2
+                }
+                height={innerHeight}
+                fill="transparent"
+                onMouseEnter={() => setHoveredIdx(i)}
+              />
+            ))}
+
+            {/* Dots */}
+            {points.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r={hoveredIdx === i ? 6 : 4}
+                fill={hoveredIdx === i ? "#1D4ED8" : "#2563EB"}
+                stroke="white" strokeWidth={2}
+                style={{ transition: "r 0.1s" }} />
+            ))}
+
+            {/* Hover tooltip */}
+            {hovered && hoveredIdx !== null && (() => {
+              const tw = 130;
+              const th = 52;
+              const tx = Math.min(Math.max(hovered.x - tw / 2, padX), chartWidth - padX - tw);
+              const ty = hovered.y - th - 10 < padY ? hovered.y + 14 : hovered.y - th - 10;
+              return (
+                <g>
+                  <line x1={hovered.x} y1={padY} x2={hovered.x} y2={padY + innerHeight}
+                    stroke="#2563EB" strokeWidth={1} strokeDasharray="3 3" opacity={0.5} />
+                  <rect x={tx} y={ty} width={tw} height={th} rx={8} fill="#1E293B" />
+                  <text x={tx + tw / 2} y={ty + 16} fontSize="11" fill="white" textAnchor="middle" fontWeight="600"
+                    fontFamily="'DM Mono', monospace">
+                    {hovered.score} / 100
+                  </text>
+                  <text x={tx + tw / 2} y={ty + 30} fontSize="10" fill="#94A3B8" textAnchor="middle">
+                    {hovered.label}
+                  </text>
+                  <text x={tx + tw / 2} y={ty + 44} fontSize="9" fill="#64748B" textAnchor="middle">
+                    {hovered.name.length > 18 ? hovered.name.slice(0, 18) + "…" : hovered.name}
+                  </text>
+                </g>
+              );
+            })()}
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function DRScorer() {
@@ -491,6 +682,7 @@ export default function DRScorer() {
   const [activeAssessmentId, setActiveAssessmentId] = useState<string | null>(null);
   const [activeAssessmentSourceName, setActiveAssessmentSourceName] = useState<string | null>(null);
   const [pendingDeleteAssessment, setPendingDeleteAssessment] = useState<{ id: string; name: string } | null>(null);
+  const [dashboardTrendRange, setDashboardTrendRange] = useState<TrendRange>("1M");
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -552,6 +744,7 @@ export default function DRScorer() {
             name: String(a.name),
             score: Number(a.score),
             date: new Date(String(a.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            createdAt: String(a.created_at),
             checkedCount: Object.values(checkedItems).filter(Boolean).length,
             checked: checkedItems,
           };
@@ -742,6 +935,7 @@ export default function DRScorer() {
             name: String(a.name),
             score: Number(a.score),
             date: new Date(String(a.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            createdAt: String(a.created_at),
             checkedCount: Object.values(c).filter(Boolean).length,
             checked: c,
           };
@@ -775,6 +969,7 @@ export default function DRScorer() {
           name: String(data.name),
           score: Number(data.score),
           date: new Date(String(data.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          createdAt: String(data.created_at),
           checkedCount: Object.values(checkedItems).filter(Boolean).length,
           checked: checkedItems,
         };
@@ -796,6 +991,7 @@ export default function DRScorer() {
               name: String(a.name),
               score: Number(a.score),
               date: new Date(String(a.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+              createdAt: String(a.created_at),
               checkedCount: Object.values(c).filter(Boolean).length,
               checked: c,
             };
@@ -948,6 +1144,7 @@ export default function DRScorer() {
         name: String(fresh.name),
         score: Number(fresh.score),
         date: new Date(String(fresh.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        createdAt: String(fresh.created_at),
         checkedCount: Object.values(checkedItems).filter(Boolean).length,
         checked: checkedItems,
       };
@@ -966,6 +1163,7 @@ export default function DRScorer() {
             name: String(a.name),
             score: Number(a.score),
             date: new Date(String(a.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            createdAt: String(a.created_at),
             checkedCount: Object.values(c).filter(Boolean).length,
             checked: c,
           };
@@ -1185,7 +1383,7 @@ export default function DRScorer() {
 
         {/* ── Dashboard view ── */}
         {view === "dashboard" && (
-          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", marginBottom: 20, gap: 10, flexWrap: isMobile ? "wrap" : "nowrap" }}>
               <div>
                 <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1E293B", margin: 0 }}>My assessments</h1>
@@ -1200,14 +1398,27 @@ export default function DRScorer() {
               </button>
             </div>
             {user ? (
-              <SavedAssessments
-                assessments={savedAssessments}
-                onLoad={handleLoad}
-                onNew={() => setView("scorer")}
-                onDelete={requestDelete}
-                deletingId={deletingId}
-                isMobile={isMobile}
-              />
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, alignItems: "start" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>Saved assessments</div>
+                  <SavedAssessments
+                    assessments={savedAssessments}
+                    onLoad={handleLoad}
+                    onNew={() => setView("scorer")}
+                    onDelete={requestDelete}
+                    deletingId={deletingId}
+                    isMobile={isMobile}
+                  />
+                </div>
+                <div style={{ position: isMobile ? "static" : "sticky", top: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#64748B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>Score trend</div>
+                  <AssessmentsTrendCard
+                    assessments={savedAssessments}
+                    selectedRange={dashboardTrendRange}
+                    onRangeChange={setDashboardTrendRange}
+                  />
+                </div>
+              </div>
             ) : (
               <div style={{ textAlign: "center", padding: "32px 0", color: "#94A3B8", fontSize: 13 }}>
                 Sign in to view and manage your saved assessments.
