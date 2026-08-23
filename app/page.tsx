@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { User } from "@supabase/supabase-js";
+import AwsConnect from "@/app/components/AwsConnect";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 type Weight = "critical" | "high" | "medium";
@@ -657,7 +658,7 @@ function AssessmentsTrendCard({
 export default function DRScorer() {
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<"scorer" | "dashboard" | "community">("scorer"); // scorer | dashboard | community
+  const [view, setView] = useState<"scorer" | "dashboard" | "community" | "aws">("scorer"); // scorer | dashboard | community | aws
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [assessmentName, setAssessmentName] = useState("My AWS DR assessment");
   const [companySize, setCompanySize] = useState("Startup (1–50)");
@@ -1206,7 +1207,7 @@ export default function DRScorer() {
             <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "#EFF6FF", color: "#1D4ED8", fontWeight: 500 }}>AWS</span>
           </div>
           <div style={{ display: "flex", gap: 4, width: isMobile ? "100%" : "auto", order: isMobile ? 3 : 0 }}>
-            {([["scorer", "Scorer"], ["dashboard", "My assessments"], ["community", "Community"]] as const).map(([v, label]) => (
+            {([["scorer", "Scorer"], ["dashboard", "My assessments"], ["community", "Community"], ["aws", "AWS Scan"]] as const).map(([v, label]) => (
               <button key={v} onClick={() => setView(v)}
                 style={{ fontSize: 13, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
                   background: view === v ? "#F1F5F9" : "transparent",
@@ -1502,6 +1503,19 @@ export default function DRScorer() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── AWS Scan view ── */}
+        {view === "aws" && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1E293B", margin: 0 }}>AWS Scan</h1>
+              <p style={{ fontSize: 13, color: "#94A3B8", margin: "4px 0 0" }}>
+                Connect a read-only IAM role to detect DR weaknesses across your live AWS infrastructure.
+              </p>
+            </div>
+            <AwsConnect user={user} isMobile={isMobile} />
           </div>
         )}
       </div>
