@@ -3,6 +3,8 @@
 // template) and, from Phase 2 onward, the scan backend.
 
 export const SCANNER_ROLE_NAME = "DRscoreScannerRole";
+export const DEFAULT_REGION = "us-east-1";
+export const AWS_ACCOUNT_ID_RE = /^\d{12}$/;
 
 // Least-privilege, read-only actions needed by the Phase 1 checks
 // (backup, RDS multi-AZ, EC2/EBS snapshots) plus the remaining Phase 4
@@ -64,7 +66,9 @@ export function buildRoleArn(awsAccountId: string, roleName: string = SCANNER_RO
 // correct trust policy (scoped to this connection's ExternalId) and the
 // least-privilege permissions policy attached inline.
 export function buildCloudFormationTemplate(scannerAccountArn: string, externalId: string): string {
-  const policyActions = SCANNER_POLICY_DOCUMENT.Statement[0].Action.map((a) => `          - "${a}"`).join("\n");
+  // Must be indented to at least the "Action:" key's own column (16 spaces
+  // below), or the YAML parser dedents out of the enclosing statement map.
+  const policyActions = SCANNER_POLICY_DOCUMENT.Statement[0].Action.map((a) => `                  - "${a}"`).join("\n");
   return `AWSTemplateFormatVersion: "2010-09-09"
 Description: DRscore read-only cross-account scanner role
 

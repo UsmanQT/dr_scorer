@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
+import { AWS_ACCOUNT_ID_RE, DEFAULT_REGION } from "@/utils/aws/scannerRole";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ type AwsConnection = {
 
 type ConnectResponse = {
   connection: AwsConnection;
+  reused?: boolean;
   scannerAccountArn: string;
   policyDocument: unknown;
   trustPolicy: unknown;
@@ -26,7 +28,7 @@ type ConnectResponse = {
 };
 
 const COMMON_REGIONS = [
-  "us-east-1",
+  DEFAULT_REGION,
   "us-west-2",
   "eu-west-1",
   "eu-central-1",
@@ -35,9 +37,31 @@ const COMMON_REGIONS = [
   "ap-northeast-1",
 ];
 
-const AWS_ACCOUNT_ID_RE = /^\d{12}$/;
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function fetchConnectionsFromApi(): Promise<{ data: AwsConnection[] } | { error: string }> {
+  try {
+    const res = await fetch("/api/aws/connect");
+    const json = await res.json();
+    if (!res.ok) return { error: json.error ?? "Could not load connections." };
+    return { data: json.connections ?? [] };
+  } catch {
+    return { error: "Network error — please try again." };
+  }
+}
+
+function isConnectResponse(json: unknown): json is ConnectResponse {
+  if (!json || typeof json !== "object") return false;
+  const r = json as Partial<ConnectResponse>;
+  return (
+    !!r.connection &&
+    typeof r.connection === "object" &&
+    typeof (r.connection as AwsConnection).external_id === "string" &&
+    typeof r.cloudFormationTemplate === "string" &&
+    !!r.trustPolicy &&
+    !!r.policyDocument
+  );
+}
 
 function statusColor(status: ConnectionStatus): { bg: string; text: string } {
   if (status === "verified") return { bg: "#D1FAE5", text: "#065F46" };
@@ -102,10 +126,11 @@ function Card({ children }: { children: React.ReactNode }) {
 export default function AwsConnect({ user, isMobile }: { user: User | null; isMobile: boolean }) {
   const [connections, setConnections] = useState<AwsConnection[]>([]);
   const [loadingConnections, setLoadingConnections] = useState(false);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
 
   const [accountAlias, setAccountAlias] = useState("");
   const [awsAccountId, setAwsAccountId] = useState("");
-  const [selectedRegions, setSelectedRegions] = useState<string[]>(["us-east-1"]);
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([DEFAULT_REGION]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -114,37 +139,46 @@ export default function AwsConnect({ user, isMobile }: { user: User | null; isMo
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyMessage, setVerifyMessage] = useState<Record<string, string>>({});
 
+  const userId = user?.id ?? null;
+
   const loadConnections = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
     setLoadingConnections(true);
-    try {
-      const res = await fetch("/api/aws/connect");
-      const json = await res.json();
-      if (res.ok) setConnections(json.connections ?? []);
-    } finally {
-      setLoadingConnections(false);
+    const result = await fetchConnectionsFromApi();
+    if ("data" in result) {
+      setConnections(result.data);
+      setConnectionsError(null);
+    } else {
+      setConnectionsError(result.error);
     }
-  }, [user]);
+    setLoadingConnections(false);
+  }, [userId]);
 
   useEffect(() => {
     let mounted = true;
-    if (!user) return;
+    if (!userId) return;
 
     (async () => {
       setLoadingConnections(true);
-      try {
-        const res = await fetch("/api/aws/connect");
-        const json = await res.json();
-        if (mounted && res.ok) setConnections(json.connections ?? []);
-      } finally {
-        if (mounted) setLoadingConnections(false);
+      const result = await fetchConnectionsFromApi();
+      if (!mounted) return;
+      if ("data" in result) {
+        setConnections(result.data);
+        setConnectionsError(null);
+      } else {
+        setConnectionsError(result.error);
       }
+      setLoadingConnections(false);
     })();
 
     return () => {
       mounted = false;
     };
-  }, [user]);
+    // Keyed on the stable user id, not the `user` object — Supabase hands
+    // back a new object reference on every auth event (including periodic
+    // token refreshes for a long-lived session), which would otherwise
+    // re-fetch on every one of those instead of on actual sign-in/out.
+  }, [userId]);
 
   const toggleRegion = (region: string) => {
     setSelectedRegions((prev) =>
@@ -178,7 +212,11 @@ export default function AwsConnect({ user, isMobile }: { user: User | null; isMo
         setFormError(json.error ?? "Could not create connection.");
         return;
       }
-      setSetupResult(json as ConnectResponse);
+      if (!isConnectResponse(json)) {
+        setFormError("Unexpected response from server — please try again.");
+        return;
+      }
+      setSetupResult(json);
       setAccountAlias("");
       setAwsAccountId("");
       await loadConnections();
@@ -293,7 +331,15 @@ export default function AwsConnect({ user, isMobile }: { user: User | null; isMo
             Your connections
           </div>
           {loadingConnections && <div style={{ fontSize: 12, color: "#94A3B8" }}>Loading…</div>}
-          {!loadingConnections && connections.length === 0 && (
+          {!loadingConnections && connectionsError && (
+            <div style={{ fontSize: 12, color: "#B91C1C", marginBottom: 10 }}>
+              {connectionsError}{" "}
+              <button onClick={loadConnections} style={{ border: "none", background: "none", color: "#B91C1C", textDecoration: "underline", cursor: "pointer", fontSize: 12, padding: 0 }}>
+                Retry
+              </button>
+            </div>
+          )}
+          {!loadingConnections && !connectionsError && connections.length === 0 && (
             <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "16px 0" }}>
               No AWS accounts connected yet.
             </div>
@@ -343,11 +389,13 @@ export default function AwsConnect({ user, isMobile }: { user: User | null; isMo
           <>
             <Card>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#059669", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
-                Connection created — status: pending
+                {setupResult.reused ? "Existing connection found" : "Connection created — status: pending"}
               </div>
               <div style={{ fontSize: 12, color: "#94A3B8", lineHeight: 1.5 }}>
-                Follow the steps below in your AWS account, then come back and click
-                &quot;Verify connection&quot; in the list on the left.
+                {setupResult.reused
+                  ? "You already have a connection for this AWS account — reusing its external ID instead of creating a duplicate. If you haven't deployed the role yet, follow the steps below."
+                  : <>Follow the steps below in your AWS account, then come back and click
+                    &quot;Verify connection&quot; in the list on the left.</>}
               </div>
             </Card>
 
